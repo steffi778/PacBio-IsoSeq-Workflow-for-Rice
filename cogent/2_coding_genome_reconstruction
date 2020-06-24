@@ -1,0 +1,49 @@
+#!/bin/bash
+
+
+echo "Usage: Reconstruct coding genome (fake genome). Use as ./script_coding_genome_reconstruction.sh dir name sub-species (aus,ind,jap)"
+
+dir=$1
+name=$2
+sub=$3
+
+
+# 1. If not happened already, open anaCogent environment
+#module load devel/anaconda2
+#source activate anaCogent
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/programs/Cogent/Complete-Striped-Smith-Waterman-Library/src
+#export PYTHONPATH=$PYTHONPATH:~/programs/Cogent/Complete-Striped-Smith-Waterman-Library/src
+
+cd $dir
+if [[ $sub == 'jap' ]]; then
+    generate_batch_cmd_for_Cogent_reconstruction.py -G ~/ngstemp/Osa_PoP_Iso-seq_Hincha/PacBio/ana_merged_smrt_cells_consensus_seq/4_LoRDEC/2_mapping_minimap2/Oryza_sativa_japonica_OS44.mmi -S $name $dir >\
+						    cmd_reconstruct_${name}
+elif [[ $sub == 'ind' ]]; then
+    generate_batch_cmd_for_Cogent_reconstruction.py -G ~/ngstemp/Osa_PoP_Iso-seq_Hincha/PacBio/ana_merged_smrt_cells_consensus_seq/4_LoRDEC/2_mapping_minimap2/Oryza_sativa_indica_S498.mmi -S $name $dir >\
+						    cmd_reconstruct_${name}
+elif [[ $sub == 'aus' ]]; then
+    generate_batch_cmd_for_Cogent_reconstruction.py -G ~/ngstemp/Osa_PoP_Iso-seq_Hincha/PacBio/ana_merged_smrt_cells_consensus_seq/4_LoRDEC/2_mapping_minimap2/Oryza_sativa_aus_N22.mmi -S $name $dir >\
+						    cmd_reconstruct_${name}
+fi
+
+chmod 755 cmd_reconstruct_${name}
+./cmd_reconstruct_${name} &> cmd_reconstruct_${name}.log
+
+counter=0
+
+for d in $dir/* ; do
+    FILE=$d/cogent2.fa
+    if [ ! -f $FILE ]; then
+        echo "$d failed. Please re-run."
+        counter=$((counter+1))
+    fi
+done
+
+if [ $counter -eq 0 ]; then
+    echo "All jobs completed! Proceed to reconstruction."
+else
+    echo "Some jobs failed. Please re-run them."
+fi
+
+cd ../
+#source deactivate

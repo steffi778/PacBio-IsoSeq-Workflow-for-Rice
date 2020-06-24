@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# For collapsing reads without a genome reference. Second script to use.
+
+name=$1
+dir=$2
+
+export PATH=$PATH:~/programs/cDNA_Cupcake/sequence
+#module load devel/anaconda2
+
+cd ${name}
+# CREATE FAKE GENOME
+## Get unassigned sequences
+tail -n 1 final.partition.txt | tr ',' '\n'  > unassigned.list
+get_seqs_from_list.py ~/ngstemp/Osa_PoP_Iso-seq_Hincha/PacBio/ana_merged_smrt_cells_consensus_seq/3_filtered_sequences/filtered.${name}.fasta unassigned.list > unassigned.fasta
+
+## Concatenate unassigned with Cogent contigs
+mkdir collected
+cd collected
+cat ../${dir}/*/cogent2.renamed.fasta ../unassigned.fasta > cogent.fake_genome.fasta
+
+## Collapsing redundant isoforms
+minimap2 -ax splice -t 10 -uf --secondary=no cogent.fake_genome.fasta ~/ngstemp/Osa_PoP_Iso-seq_Hincha/PacBio/ana_merged_smrt_cells_consensus_seq/3_filtered_sequences/filtered.${name}.fasta \
+	 > filtered.${name}.sam
+
+sort -k 3,3 -k 4,4n filtered.${name}.sam > filtered.${name}.srt.sam
+
+#source activate anaCogent
+collapse_isoforms_by_sam.py --input ~/ngstemp/Osa_PoP_Iso-seq_Hincha/PacBio/ana_merged_smrt_cells_consensus_seq/3_filtered_sequences/filtered.${name}.fasta -s filtered.${name}.srt.sam\
+			    -c 0.95 -i 0.85 --dun-merge-5-shorter -o cogent.${name}.no5merge &> cogent.${name}.log
+
+~/programs/cDNA_Cupcake/sequence/fa2fq.py cogent.${name}.no5merge.collapsed.rep.fa
+mv cogent.${name}.no5merge.collapsed.rep.fastq cogent.${name}.no5merge.collapsed.rep.fq
+
+#get_abundance_post_collapse.py cogent.${name}.no5merge.collapsed ~/ngstemp/Osa_PoP_Iso-seq_Hincha/PacBio/ana_merged_smrt_cells_consensus_seq/1_consensus_sequences/${name}/cluster_report.csv
+
+echo -e "pbid\tcount_fl" > cogent.${name}.no5merge.collapsed.abundance.txt
+paste <(awk '{print $1}' cogent.${name}.no5merge.collapsed.group.txt) <(awk -F , '{print NF}' cogent.${name}.no5merge.collapsed.group.txt ) >> cogent.${name}.no5merge.collapsed.abundance.txt
+
+filter_away_subset.py cogent.${name}.no5merge.collapsed
+
+cd ../../
+#source deactivate

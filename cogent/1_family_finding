@@ -1,0 +1,62 @@
+#!/bin/bash
+
+echo "Usage: Cogent finding families. Use as source ./1step_script_family_finding.sh dir fasta name"
+dir=$1
+fasta=$2 # full path to fasta
+name=$3
+
+## Tutorial from https://github.com/Magdoll/Cogent/wiki/Running-Cogent
+## Check number of isoforms
+## if # isoforms < 20.000 - run family finding for a small dataset
+## if # isoforms > 20.000 - run family finding for a large dataset
+
+# 1. If not happened already, open anaCogent environment
+#module load devel/anaconda2
+#source activate anaCogent
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/programs/Cogent/Complete-Striped-Smith-Waterman-Library/src
+#export PYTHONPATH=$PYTHONPATH:~/programs/Cogent/Complete-Striped-Smith-Waterman-Library/src
+
+cd ${dir}
+# 2. Go through each file & run mash
+if [ `grep "^>" ${fasta} | wc -l` -lt 20000 ]
+then
+    echo "fasta is small"
+    grep "^>" ${fasta} | awk -F'[> =;]' '{print $2"\t"$4}' > ${name}.weights
+    run_mash.py -k 30 --cpus=20 ${fasta} &> mash.${name}.log
+    process_kmer_to_graph.py -c ${name}.weights ${fasta} filtered.${name}.fasta.s1000k30.dist process_kmer_${name} ${name} &> process_kmer_${name}.log
+    cd ../
+else
+    echo "fasta is large"
+    ln -s ${fasta} isoseq_flnc.fasta
+    run_preCluster.py --cpus=20 &> pre_cluster_${name}.log
+    generate_batch_cmd_for_Cogent_family_finding.py --cpus=12 --cmd_filename=cmd_${name} preCluster.cluster_info.csv preCluster_out ${name}
+    chmod 755 cmd_${name}
+    ./cmd_${name} &> cmd_${name}.log
+    ### Check if all jobs are complete ####
+    counter=0
+    for d in preCluster_out/* ; do
+	arr=(${d/\// })
+	FILE=$d/${arr[1]}".partition.txt";
+	if [ ! -f $FILE ]; then
+            echo "$d failed. Please re-run."
+            counter=$((counter+1))
+	fi
+    done
+    
+    if [ $counter -eq 0 ]; then
+	echo "All bins completed! Proceed to reconstruction."
+	# Get final partitions #
+	printf "Partition\tSize\tMembers\n" > final.partition.txt
+	ls preCluster_out/*/*partition.txt | xargs -n1 -i sed '1d; $d' {} | cat >> final.partition.txt
+	# remove preclustering stuff, don't need them anymore
+	rm -rf preCluster_out/
+	rm -rf preCluster.*
+    else
+	echo "Some bins failed. Please re-run them."
+    fi
+    # Get back to "root" folder
+    cd ../
+fi
+
+#source deactivate
+

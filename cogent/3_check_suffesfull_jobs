@@ -1,0 +1,20 @@
+#!/bin/bash
+
+dir=$1
+counter=0
+
+echo $dir
+for d in $dir/* ; do
+    FILE=$d/cogent2.fa
+    if [ ! -f $FILE ]; then
+        echo "$d failed. Please re-run."
+        counter=$((counter+1))
+    fi
+done
+
+if [ $counter -eq 0 ]; then
+    echo "All jobs completed! Proceed to reconstruction."
+else
+    echo "Some jobs failed. Please re-run them."
+fi
+
