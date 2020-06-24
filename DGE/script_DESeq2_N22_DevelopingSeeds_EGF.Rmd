@@ -1,0 +1,97 @@
+---
+title: "DGE - Combined Heat and Drought Stress in Rice"
+date: "April 1, 2020"
+output: html_document
+---
+
+# Getting started 
+
+```{r setup, include=FALSE}
+
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# 
+# BiocManager::install("DESeq2")
+# BiocManager::install("rhdf5")
+# BiocManager::install("tximport")
+
+library("DESeq2")
+library("rhdf5")
+library("tximport")
+library("tidyverse")
+
+```
+
+# Load data
+
+```{r}
+## Developing seeds, Early grain filling stage, End of Stress, Controll vs. Stress
+dir.PB.DS <- "mapping_kallisto_PB_DevSeed_EGF_EoS/"
+dir.PB.DS <- "mapping_kallisto_PB_DevSeed_EGF_EoS/"
+files.PB.DS <- file.path(dir.PB.DS, paste("2479_", c("M", "N", "O", "P", "Q", "R"), ".abundance.tsv", sep=""))
+names(files.PB.DS) <- paste0("sample_", c("M", "N", "O", "P", "Q", "R"))
+tx2gene.PB.DS <- read.table("mapping_kallisto_PacBio_EGF/tx2gene_PB.txt", sep="\t", header=T) 
+
+txi.kallisto.tsv.PB.DS <- tximport(files.PB.DS, type = "kallisto", tx2gene = tx2gene.PB.DS)
+
+```
+
+# DESeq2 Analysis
+
+```{r}
+# Create a sample table
+sampleTable.DS <- read.table("mapping_kallisto_PB_DevSeed_EGF_EoS/sampleTable.txt", header = T, sep = "\t")
+rownames(sampleTable.DS) <- colnames(txi.kallisto.tsv.PB.DS$counts)
+
+# Read in data for DESeq2
+dds.PB.DS <- DESeqDataSetFromTximport(txi.kallisto.tsv.PB.DS, sampleTable.DS, ~Treatment)
+
+# Show summary
+dds.PB.DS
+
+# Check if treatment factor in right order
+dds.PB.DS$Treatment
+
+# Run DESeq2
+dds.PB.DS <- DESeq(dds.PB.DS)
+res.PB.DS <- results(dds.PB.DS)
+
+# Get number of DEGs
+summary(res.PB.DS)
+
+```
+
+# Explore and save results
+
+```{r}
+# MA plot
+plotMA(res.PB.DS, ylim=c(-2,2))
+
+# plot counts
+d.PB.DS <- plotCounts(dds.PB.DS, gene=which.min(res.PB.DS$padj), intgroup="Treatment", returnData=TRUE)
+
+library("ggplot2")
+ggplot(d.PB.DS, aes(x=Treatment, y=count)) + 
+  geom_point(position=position_jitter(w=0.1,h=0)) + 
+  scale_y_log10(breaks=c(25,100,400))
+
+
+# Filter da for significant genes
+library(tidyverse)
+res.PB.DS.tidy <- as_tibble(res.PB.DS) %>% mutate(names = rownames(res.PB.DS))
+res.PB.DS.tidy.filt <- filter(res.PB.DS.tidy, (log2FoldChange >= 1 | log2FoldChange <= -1) & padj <= 0.05) 
+
+```
+
+# Add annotation
+
+```{r}
+# Get annotations for PB
+anno.PB <- read.delim("mapping_kallisto_PB_DevSeed_EGF_EoS/N22_annotation.txt", sep="\t", header = T)
+anno.PB.tidy <- as_tibble(anno.PB)
+# For developing seeds
+merged.PB.DS.DGE.anno <- inner_join(res.PB.DS.tidy.filt, anno.PB.tidy, by=c("names" = "GENE_ID")) %>% 
+  select("names","IDENTIFIER", "log2FoldChange", "padj", "MERCATOR_BIN", "MERCATOR_DESCRIPTION", "BLASTX", "BLASTP", "PFAM", "GO")
+write_tsv(merged.PB.DS.DGE.anno, "results_DGE_DESeq2_kallisto_vsPBref_DevSeeds_EoS.tsv")
+
+```

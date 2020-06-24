@@ -1,0 +1,7 @@
+Project	Library	Tissue	Cultivar	Stage/Timepoint	Treatment
+2479	M	Developing Seed	N22	EGF End of stress	Control
+2479	N	Developing Seed	N22	EGF End of stress	Control
+2479	O	Developing Seed	N22	EGF End of stress	Control
+2479	P	Developing Seed	N22	EGF End of stress	Stress
+2479	Q	Developing Seed	N22	EGF End of stress	Stress
+2479	R	Developing Seed	N22	EGF End of stress	Stress
